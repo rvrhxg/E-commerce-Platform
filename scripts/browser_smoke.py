@@ -39,7 +39,8 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
             page.goto("http://127.0.0.1:8000")
             page.locator(".product").first.wait_for()
             pause(page)
-            page.screenshot(path="screenshots/store-desktop.png", full_page=True)
+            if not recording_enabled():
+                page.screenshot(path="screenshots/store-desktop.png", full_page=True)
             page.get_by_role("button", name="Войти", exact=True).click()
             page.get_by_role("button", name="Создать аккаунт", exact=True).click()
             auth = page.locator("#auth-dialog")
@@ -52,16 +53,20 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
             page.get_by_role("button", name="Корзина").click()
             page.get_by_label("Адрес доставки").fill("Демонстрационный адрес доставки")
             pause(page)
-            page.locator("#cart-dialog").screenshot(path="screenshots/cart.png")
+            if not recording_enabled():
+                page.locator("#cart-dialog").screenshot(path="screenshots/cart.png")
             page.get_by_role("button", name="Оформить заказ", exact=True).click()
             page.locator("#orders").wait_for(state="visible")
             page.get_by_text("Заказ №1 · Оформлен", exact=True).wait_for()
             pause(page)
-            page.screenshot(path="screenshots/order.png", full_page=True)
+            if not recording_enabled():
+                page.screenshot(path="screenshots/order.png", full_page=True)
             page.get_by_role("button", name="Каталог", exact=True).click()
-            page.set_viewport_size({"width": 390, "height": 844})
+            if not recording_enabled():
+                page.set_viewport_size({"width": 390, "height": 844})
             pause(page)
-            page.screenshot(path="screenshots/store-mobile.png", full_page=True)
+            if not recording_enabled():
+                page.screenshot(path="screenshots/store-mobile.png", full_page=True)
             page.get_by_role("button",name="Выйти",exact=True).click()
             page.get_by_role("button",name="Войти",exact=True).click()
             page.get_by_role("button",name="Создать аккаунт",exact=True).click()
