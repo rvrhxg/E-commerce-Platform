@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String, UniqueConstraint, Index
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -38,7 +38,7 @@ class Product(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    __table_args__ = (UniqueConstraint("user_id", "idempotency_key"),)
+    __table_args__ = (UniqueConstraint("user_id", "idempotency_key"), Index('ix_orders_user_id_id', 'user_id', 'id'))
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     idempotency_key: Mapped[str] = mapped_column(String(80))

@@ -8,9 +8,9 @@ Swagger: /docs, OpenAPI: /openapi.json. Для изменяющих запрос
 | POST | /api/auth/login | email, password |
 | POST | /api/auth/logout | Отзыв текущей сессии |
 | GET | /api/auth/me | Профиль |
-| GET | /api/products | Активные товары, до 200 |
+| GET | /api/products | Активные товары, страницами offset/limit |
 | POST | /api/orders | items: [{product_id,quantity}], address, idempotency_key |
-| GET | /api/orders | Только заказы текущего клиента, до 200 |
+| GET | /api/orders | Только заказы текущего клиента, страницами offset/limit |
 | POST | /api/admin/products | sku, title, description?, category?, price_kopecks, stock |
 | GET | /api/admin/orders | Заказы магазина, только администратор |
 | PATCH | /api/admin/orders/:id | status |
@@ -19,3 +19,6 @@ Swagger: /docs, OpenAPI: /openapi.json. Для изменяющих запрос
 Статусы: placed → processing → shipped → delivered; placed/processing можно отменить в cancelled. Отмена возвращает остатки один раз. Повторный запрос с одинаковым ключом и содержимым возвращает тот же заказ; с другим содержимым — 409. При конкурентном конфликте повторите исходный запрос с тем же ключом после отката.
 
 Цены присылает сервер, клиент не задаёт итоговую сумму. quantity — целое число от 1 до 99; bool и дроби отвергаются. Сумма товара ограничена 100000000 копеек. Ошибки: 400 доменные данные, 401 сессия, 403 Origin/роль, 409 остатки/ключ/статус/SKU, 413 размер, 415 media type, 422 схема Pydantic, 429 вход. Подробности — поле detail.
+
+
+Обновление: GET /api/products, /api/orders и /api/admin/orders принимают offset (0+) и limit (1–100, default 24), возвращают массив и X-Total-Count. Сортировка стабильна по id; счётчик заказов ограничен владельцем, для администратора — все заказы. Миграции: [MIGRATIONS.md](MIGRATIONS.md). Публичный запуск остаётся вне проверенной области MVP.

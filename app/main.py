@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictInt
 from sqlalchemy import select
@@ -153,9 +153,11 @@ def create_app(url=None, origin=None):
             return profile(identity(request, session))
 
     @app.get("/api/products")
-    def products():
+    def products(response: Response, offset: int = Query(0, ge=0), limit: int = Query(24, ge=1, le=100)):
         with sessions() as session:
-            return [{"id": p.id, "title": p.title, "description": p.description, "category": p.category, "price_kopecks": p.price_kopecks, "stock": p.stock} for p in session.scalars(select(Product).where(Product.active.is_(True)).order_by(Product.id).limit(200))]
+            from sqlalchemy import func
+            response.headers['X-Total-Count'] = str(session.scalar(select(func.count()).select_from(Product).where(Product.active.is_(True))))
+            return [{"id": p.id, "title": p.title, "description": p.description, "category": p.category, "price_kopecks": p.price_kopecks, "stock": p.stock} for p in session.scalars(select(Product).where(Product.active.is_(True)).order_by(Product.id).offset(offset).limit(limit))]
 
     def order_data(session, order):
         return {"id": order.id, "status": order.status, "total_kopecks": order.total_kopecks, "created_at": order.created_at, "items": [{"product_id": i.product_id, "title": i.title, "unit_price_kopecks": i.unit_price_kopecks, "quantity": i.quantity} for i in session.scalars(select(OrderItem).where(OrderItem.order_id == order.id))]}
@@ -173,10 +175,12 @@ def create_app(url=None, origin=None):
             raise HTTPException(400, str(error))
 
     @app.get("/api/orders")
-    def orders(request: Request):
+    def orders(request: Request, response: Response, offset: int = Query(0, ge=0), limit: int = Query(24, ge=1, le=100)):
         with sessions() as session:
             user = identity(request, session)
-            return [order_data(session, o) for o in session.scalars(select(Order).where(Order.user_id == user.id).order_by(Order.id.desc()).limit(200))]
+            from sqlalchemy import func
+            response.headers['X-Total-Count'] = str(session.scalar(select(func.count()).select_from(Order).where(Order.user_id == user.id)))
+            return [order_data(session, o) for o in session.scalars(select(Order).where(Order.user_id == user.id).order_by(Order.id.desc()).offset(offset).limit(limit))]
 
     def admin(request, session):
         user = identity(request, session)
@@ -197,10 +201,12 @@ def create_app(url=None, origin=None):
             raise HTTPException(409, "SKU unavailable")
 
     @app.get("/api/admin/orders")
-    def all_orders(request: Request):
+    def all_orders(request: Request, response: Response, offset: int = Query(0, ge=0), limit: int = Query(24, ge=1, le=100)):
         with sessions() as session:
             admin(request, session)
-            return [order_data(session, o) for o in session.scalars(select(Order).order_by(Order.id.desc()).limit(200))]
+            from sqlalchemy import func
+            response.headers['X-Total-Count'] = str(session.scalar(select(func.count()).select_from(Order)))
+            return [order_data(session, o) for o in session.scalars(select(Order).order_by(Order.id.desc()).offset(offset).limit(limit))]
 
     @app.patch("/api/admin/orders/{order_id}")
     def status(order_id: int, data: StatusInput, request: Request):
