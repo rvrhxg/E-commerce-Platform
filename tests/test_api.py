@@ -32,3 +32,4 @@ def test_api_checkout_replay_owner_isolation_logout_and_strict_inputs(tmp_path):
         assert alice.post("/api/orders", content="x" * 65537, headers={**headers, "Content-Type": "application/json"}).status_code == 413
         assert alice.post("/api/auth/logout", json={}, headers=headers).status_code == 200
         assert alice.get("/api/orders").status_code == 401
+        assert alice.post("/api/auth/login",json={"email":"alice@example.test","password":"long-test-password","name":""},headers=headers).status_code == 200
