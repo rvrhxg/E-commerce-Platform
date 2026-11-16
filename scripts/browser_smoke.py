@@ -55,6 +55,13 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
             page.get_by_role("button", name="Каталог", exact=True).click()
             page.set_viewport_size({"width": 390, "height": 844})
             page.screenshot(path="screenshots/store-mobile.png", full_page=True)
+            page.get_by_role("button",name="Выйти",exact=True).click()
+            page.get_by_role("button",name="Войти",exact=True).click()
+            page.get_by_role("button",name="Создать аккаунт",exact=True).click()
+            auth.get_by_label("Email",exact=True).fill("buyer@example.test")
+            auth.get_by_label("Пароль",exact=True).fill("isolated-browser-password")
+            auth.get_by_role("button",name="Продолжить",exact=True).click()
+            auth.wait_for(state="hidden")
             assert not errors, errors
             browser.close()
     finally:
