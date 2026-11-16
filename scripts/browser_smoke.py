@@ -9,6 +9,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from app.database import database
 from app.seed import seed_catalog
+from app.models import Product, Order
+from playwright.sync_api import expect
 
 with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
     url = "sqlite:///" + str(Path(temporary) / "browser.sqlite").replace("\\", "/")
@@ -62,6 +64,22 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
             auth.get_by_label("Пароль",exact=True).fill("isolated-browser-password")
             auth.get_by_role("button",name="Продолжить",exact=True).click()
             auth.wait_for(state="hidden")
+            # Add disposable records only after the portfolio screenshots.
+            engine, sessions = database(url)
+            with sessions.begin() as session:
+                session.add_all([Product(sku=f'PAGE-{i}',title=f'Pagination {i}',price_kopecks=100,stock=1) for i in range(25)])
+                session.add_all([Order(user_id=1,idempotency_key=f'page-key-{i}',request_hash='hash',total_kopecks=100,delivery_address='Test address') for i in range(25)])
+            engine.dispose()
+            page.reload()
+            expect(page.locator('.product')).to_have_count(24)
+            page.locator('#more-products').click()
+            expect(page.locator('.product')).to_have_count(31)
+            page.locator('#orders-nav').click()
+            expect(page.locator('#order-list .order')).to_have_count(24)
+            page.get_by_role('button',name='Далее →',exact=True).click()
+            expect(page.locator('#order-list .order')).to_have_count(2)
+            page.get_by_role('button',name='← Назад',exact=True).click()
+            expect(page.locator('#order-list .order')).to_have_count(24)
             assert not errors, errors
             browser.close()
     finally:
