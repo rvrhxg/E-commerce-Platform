@@ -23,7 +23,7 @@ uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 
 ## Проверки
 
-`pytest -q` локально: 9 passed, 1 skipped (PostgreSQL не настроен). [CI 43856654118](https://github.com/rvrhxg/E-commerce-Platform/actions/runs/43856654118) выполнил также PostgreSQL-тест: два потока покупают последнюю единицу, успешен только один. Docker build и Chromium-сценарий регистрации/корзины/оформления заказа прошли. [CI 43858094326](https://github.com/rvrhxg/E-commerce-Platform/actions/runs/43858094326) подтвердил Docker runtime с PostgreSQL, сохранение заказа после перезапуска и непривилегированный UID.
+`pytest -q` локально: 13 passed, 1 skipped (PostgreSQL не настроен). [CI 43856654118](https://github.com/rvrhxg/E-commerce-Platform/actions/runs/43856654118) выполнил также PostgreSQL-тест: два потока покупают последнюю единицу, успешен только один. Docker build и Chromium-сценарий регистрации/корзины/оформления заказа прошли. [CI 43858094326](https://github.com/rvrhxg/E-commerce-Platform/actions/runs/43858094326) подтвердил Docker runtime с PostgreSQL, сохранение заказа после перезапуска и непривилегированный UID.
 
 Реальные desktop/mobile, корзина и заказ проверены визуально. Формы и данные тестов вымышленные. Декоративные изображения выполнены CSS и не являются фотографиями товаров.
 
