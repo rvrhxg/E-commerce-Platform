@@ -48,3 +48,6 @@ uvicorn app.main:create_app --factory --no-access-log --host 127.0.0.1 --port 80
 
 
 [Readiness, JSON-логи и проверка backup/restore](docs/OPERATIONS.md).
+
+
+[Видеодемонстрация и обзорные кадры](docs/demo/README.md).
