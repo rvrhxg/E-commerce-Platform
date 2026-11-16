@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
         seed_catalog(session)
     engine.dispose()
     env = {**os.environ, "DATABASE_URL": url, "APP_ORIGIN": "http://127.0.0.1:8000"}
-    server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory", "--host", "127.0.0.1", "--port", "8000"], env=env)
+    server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory","--no-access-log", "--host", "127.0.0.1", "--port", "8000"], env=env)
     try:
         for _ in range(60):
             try:

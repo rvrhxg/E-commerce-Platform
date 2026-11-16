@@ -1,3 +1,4 @@
+from .observability import install_observability
 import os
 import time
 from pathlib import Path
@@ -246,6 +247,14 @@ def create_app(url=None, origin=None):
             raise HTTPException(404, "Order not found")
         except ValidationError as error:
             raise HTTPException(409, str(error))
+
+    def database_probe():
+        from sqlalchemy import text
+        with engine.connect() as connection:
+            if connection.execute(text('SELECT version_num FROM alembic_version LIMIT 1')).first() is None:
+                raise RuntimeError('Schema is not initialized')
+
+    install_observability(app, database_probe)
 
     static = Path(__file__).resolve().parent.parent / "public"
     if static.exists():

@@ -41,6 +41,7 @@ try:
     docker("run", "-d", "--name", name, "--network", "host", "-e", f"DATABASE_URL={url}", "-e", "APP_ORIGIN=http://127.0.0.1:8000", "atelier-test")
     created = True
     ready()
+    assert httpx.get('http://127.0.0.1:8000/api/ready').status_code==200
     with httpx.Client(base_url="http://127.0.0.1:8000", headers={"Origin": "http://127.0.0.1:8000"}) as client:
         credentials = {"email": "container@example.test", "password": uuid.uuid4().hex}
         assert client.post("/api/auth/register", json=credentials).status_code == 201

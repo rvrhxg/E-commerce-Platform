@@ -10,7 +10,7 @@ Python 3.12–3.14 проверяются матрицей CI (результа�
 
 ```sh
 python -m app.seed --catalog
-uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
+uvicorn app.main:create_app --factory --no-access-log --host 127.0.0.1 --port 8000
 ```
 
 Откройте http://localhost:8000. Создайте клиентский аккаунт с паролем от 12 символов. Администратор создаётся отдельно: `python -m app.seed --admin-email admin@example.test`; пароль вводится скрыто через getpass, встроенного пароля нет. Скрипт не повышает права существующего аккаунта и не перезаписывает заполненный каталог.
@@ -45,3 +45,6 @@ uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 Добавлены Alembic 0001/0002, страницы товаров и заказов (offset ≥ 0, limit 1–100, по умолчанию 24), X-Total-Count и кнопки перехода в интерфейсе. Серверный поиск, фильтры цены/категории/остатка и cursor-пагинация каталога описаны в [CATALOG.md](docs/CATALOG.md). Offset-пагинация не даёт снимок при конкурентных вставках. Новые проверки: роли, сессии, CSRF, изоляция страниц и миграции с сохранением данных.
 
 [Все проекты портфолио и инструкции запуска](docs/PORTFOLIO.md).
+
+
+[Readiness, JSON-логи и проверка backup/restore](docs/OPERATIONS.md).
