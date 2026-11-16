@@ -6,13 +6,14 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictInt
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.exc import IntegrityError
 from .database import database
 from .models import User, LoginSession, Product, Order, OrderItem
 from .security import hash_password, verify_password, new_token, token_hash
 from .checkout import checkout, CheckoutConflict, change_order_status
 from .domain import ValidationError
+from .catalog import Cursor, scope_for
 
 
 class Credentials(BaseModel):
@@ -158,6 +159,33 @@ def create_app(url=None, origin=None):
             from sqlalchemy import func
             response.headers['X-Total-Count'] = str(session.scalar(select(func.count()).select_from(Product).where(Product.active.is_(True))))
             return [{"id": p.id, "title": p.title, "description": p.description, "category": p.category, "price_kopecks": p.price_kopecks, "stock": p.stock} for p in session.scalars(select(Product).where(Product.active.is_(True)).order_by(Product.id).offset(offset).limit(limit))]
+
+    @app.get('/api/catalog')
+    def catalog(q: str = Query('', max_length=100), category: str = Query('', max_length=80),
+                min_price: int = Query(0, ge=0), max_price: int = Query(100_000_000, ge=0, le=100_000_000),
+                in_stock: bool = False, limit: int = Query(24, ge=1, le=100), cursor: str = Query('', max_length=512)):
+        if min_price > max_price:
+            raise HTTPException(422, 'Invalid price range')
+        q = q.strip().lower()
+        scope = scope_for((q, category, min_price, max_price, in_stock))
+        with sessions() as session:
+            try:
+                position = Cursor.decode(cursor, scope) if cursor else Cursor(0, session.scalar(select(func.max(Product.id))) or 0, scope)
+            except ValueError as error:
+                raise HTTPException(400, str(error))
+            conditions = [Product.active.is_(True), Product.id > position.after, Product.id <= position.ceiling,
+                          Product.price_kopecks >= min_price, Product.price_kopecks <= max_price]
+            if q:
+                conditions.append(or_(func.lower(Product.title).contains(q, autoescape=True), func.lower(Product.description).contains(q, autoescape=True)))
+            if category:
+                conditions.append(Product.category == category)
+            if in_stock:
+                conditions.append(Product.stock > 0)
+            rows = list(session.scalars(select(Product).where(*conditions).order_by(Product.id).limit(limit + 1)))
+            page = rows[:limit]
+            return {'items': [{'id': p.id, 'title': p.title, 'description': p.description, 'category': p.category,
+                               'price_kopecks': p.price_kopecks, 'stock': p.stock} for p in page],
+                    'next_cursor': Cursor(page[-1].id, position.ceiling, scope).encode() if len(rows) > limit else None}
 
     def order_data(session, order):
         return {"id": order.id, "status": order.status, "total_kopecks": order.total_kopecks, "created_at": order.created_at, "items": [{"product_id": i.product_id, "title": i.title, "unit_price_kopecks": i.unit_price_kopecks, "quantity": i.quantity} for i in session.scalars(select(OrderItem).where(OrderItem.order_id == order.id))]}

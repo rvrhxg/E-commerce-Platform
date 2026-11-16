@@ -13,6 +13,7 @@ def database(url=None, initialize=True):
         @event.listens_for(engine, "connect")
         def foreign_keys(connection, _):
             connection.execute("PRAGMA foreign_keys=ON")
+            connection.create_function('lower', 1, lambda value: value.lower() if value else value, deterministic=True)
     if initialize:
         migrate(engine)
     return engine, sessionmaker(engine, expire_on_commit=False)
