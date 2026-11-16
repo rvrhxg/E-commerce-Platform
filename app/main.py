@@ -86,6 +86,8 @@ def create_app(url=None, origin=None):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Cache-Control"] = "no-store"
+        if request.url.path in {"/", "/app.js", "/style.css"}:
+            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         return response
 
     def identity(request, session):

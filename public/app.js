@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id),rub=value=>new Intl.NumberFormat('ru-RU'
 const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
 const statuses={placed:'Оформлен',processing:'В обработке',shipped:'Отправлен',delivered:'Доставлен',cancelled:'Отменён'};
 let products=[],user=null,registering=false,cart=new Map(),checkoutKey=null;
-const notice=error=>$('notice').textContent=error?.message||'';
+const notice=error=>{const message=error?.message||'';$('notice').textContent=message;for(const old of document.querySelectorAll('.dialog-error'))old.remove();const dialog=document.querySelector('dialog[open]');if(dialog&&message){const note=el('p',message,'dialog-error');note.setAttribute('role','alert');dialog.prepend(note);}};
 async function run(task){notice();try{await task();}catch(error){notice(error);}}
 async function api(path,method='GET',data){const response=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});const result=await response.json();if(!response.ok){if(response.status===401&&user){user=null;account();}throw Error(typeof result.detail==='string'?result.detail:'Проверьте заполненные поля.');}return result;}
 function show(view){for(const id of ['catalog','orders','admin'])$(id).hidden=id!==view;}
