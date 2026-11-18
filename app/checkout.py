@@ -1,16 +1,16 @@
 import hashlib
 import json
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.orm import Session
 from .domain import OrderLine, ValidationError, integer, order_total, check_transition
-from .models import Order, OrderItem, Product
+from .models import Order, OrderItem, Product, Cart, CartItem
 
 
 class CheckoutConflict(ValueError):
     pass
 
 
-def checkout(session: Session, user_id: int, items: list[dict], address: str, key: str) -> Order:
+def checkout(session: Session, user_id: int, items: list[dict], address: str, key: str, cart_revision: int | None = None) -> Order:
     """Caller owns transaction; any failure must roll back stock and order together."""
     if not isinstance(address, str) or not 5 <= len(address.strip()) <= 500:
         raise ValidationError("Delivery address required")
@@ -27,6 +27,13 @@ def checkout(session: Session, user_id: int, items: list[dict], address: str, ke
         if previous.request_hash != digest:
             raise CheckoutConflict("Idempotency key already used with different contents")
         return previous
+    # Serialize cart edits before product locks; replay above never touches a new cart.
+    cart = session.scalar(select(Cart).where(Cart.user_id == user_id).with_for_update()) if cart_revision is not None else None
+    claimed_cart = None
+    if cart:
+        changed = session.execute(update(Cart).where(Cart.id == cart.id, Cart.revision == cart_revision).values(revision=Cart.revision + 1))
+        if changed.rowcount == 1:
+            claimed_cart = cart.id
     lines = []
     for product_id, quantity in normalized:
         product = session.scalar(select(Product).where(Product.id == product_id, Product.active.is_(True)).with_for_update())
@@ -41,6 +48,9 @@ def checkout(session: Session, user_id: int, items: list[dict], address: str, ke
     session.flush()
     session.add_all(OrderItem(order_id=order.id, product_id=line.product_id, title=line.title, unit_price_kopecks=line.unit_price_kopecks, quantity=line.quantity) for line in lines)
     session.flush()
+    if claimed_cart is not None:
+        for product_id, quantity in normalized:
+            session.execute(delete(CartItem).where(CartItem.cart_id == claimed_cart, CartItem.product_id == product_id, CartItem.quantity == quantity))
     return order
 
 

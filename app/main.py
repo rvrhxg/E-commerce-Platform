@@ -7,10 +7,10 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, HTTPException, Request, Response, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictInt
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, update
 from sqlalchemy.exc import IntegrityError
 from .database import database
-from .models import User, LoginSession, Product, Order, OrderItem
+from .models import User, LoginSession, Product, Order, OrderItem, Cart, CartItem
 from .security import hash_password, verify_password, new_token, token_hash
 from .checkout import checkout, CheckoutConflict, change_order_status
 from .domain import ValidationError
@@ -29,6 +29,7 @@ class BasketItem(BaseModel):
 
 
 class CheckoutInput(BaseModel):
+    cart_revision: StrictInt | None = Field(default=None, ge=0)
     items: list[BasketItem] = Field(min_length=1, max_length=100)
     address: str = Field(min_length=5, max_length=500)
     idempotency_key: str = Field(min_length=8, max_length=80)
@@ -188,6 +189,50 @@ def create_app(url=None, origin=None):
                                'price_kopecks': p.price_kopecks, 'stock': p.stock} for p in page],
                     'next_cursor': Cursor(page[-1].id, position.ceiling, scope).encode() if len(rows) > limit else None}
 
+    @app.get("/api/cart")
+    def get_cart(request: Request):
+        with sessions() as session:
+            user = identity(request, session)
+            cart = session.scalar(select(Cart).where(Cart.user_id == user.id))
+            rows = session.execute(select(CartItem, Product).join(Product, Product.id == CartItem.product_id).where(CartItem.cart_id == cart.id).order_by(CartItem.id)).all() if cart else []
+            return {"revision": cart.revision if cart else 0, "items": [{"product_id": item.product_id, "quantity": item.quantity, "title": product.title, "price_kopecks": product.price_kopecks, "stock": product.stock, "active": product.active} for item, product in rows]}
+
+    @app.put("/api/cart/items")
+    def set_cart_item(data: BasketItem, request: Request):
+        try:
+            with sessions.begin() as session:
+                user = identity(request, session)
+                product = session.get(Product, data.product_id)
+                if not product or not product.active:
+                    raise HTTPException(404, "Product unavailable")
+                if data.quantity > product.stock:
+                    raise HTTPException(409, "Insufficient stock")
+                cart = session.scalar(select(Cart).where(Cart.user_id == user.id))
+                if not cart:
+                    cart = Cart(user_id=user.id)
+                    session.add(cart)
+                    session.flush()
+                session.execute(update(Cart).where(Cart.id == cart.id).values(revision=Cart.revision + 1))
+                item = session.scalar(select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == data.product_id))
+                if item:
+                    item.quantity = data.quantity
+                else:
+                    session.add(CartItem(cart_id=cart.id, product_id=data.product_id, quantity=data.quantity))
+        except IntegrityError:
+            raise HTTPException(409, "Concurrent cart update; retry")
+        return {"ok": True}
+
+    @app.delete("/api/cart/items/{product_id}")
+    def remove_cart_item(product_id: int, request: Request):
+        from sqlalchemy import delete
+        with sessions.begin() as session:
+            user = identity(request, session)
+            cart = session.scalar(select(Cart).where(Cart.user_id == user.id))
+            if cart:
+                session.execute(update(Cart).where(Cart.id == cart.id).values(revision=Cart.revision + 1))
+                session.execute(delete(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product_id))
+        return {"ok": True}
+
     def order_data(session, order):
         return {"id": order.id, "status": order.status, "total_kopecks": order.total_kopecks, "created_at": order.created_at, "items": [{"product_id": i.product_id, "title": i.title, "unit_price_kopecks": i.unit_price_kopecks, "quantity": i.quantity} for i in session.scalars(select(OrderItem).where(OrderItem.order_id == order.id))]}
 
@@ -196,7 +241,7 @@ def create_app(url=None, origin=None):
         try:
             with sessions.begin() as session:
                 user = identity(request, session)
-                order = checkout(session, user.id, [i.model_dump() for i in data.items], data.address, data.idempotency_key)
+                order = checkout(session, user.id, [i.model_dump() for i in data.items], data.address, data.idempotency_key, data.cart_revision)
                 return order_data(session, order)
         except (CheckoutConflict, IntegrityError):
             raise HTTPException(409, "Stock or idempotency conflict; retry the same request")

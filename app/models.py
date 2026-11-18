@@ -57,3 +57,19 @@ class OrderItem(Base):
     title: Mapped[str] = mapped_column(String(200))
     unit_price_kopecks: Mapped[int]
     quantity: Mapped[int]
+
+
+class Cart(Base):
+    __tablename__ = "carts"
+    revision: Mapped[int] = mapped_column(default=0, server_default="0")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    __table_args__ = (UniqueConstraint("cart_id", "product_id"), CheckConstraint("quantity >= 1 AND quantity <= 99", name="ck_cart_quantity"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    quantity: Mapped[int]
