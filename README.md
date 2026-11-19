@@ -52,17 +52,22 @@ uvicorn app.main:create_app --factory --no-access-log --host 127.0.0.1 --port 80
 
 [Видеодемонстрация и обзорные кадры](docs/demo/README.md).
 
-## Persistent authenticated cart
+## Корзина пользователя
 
-Migration `0003` adds `carts` (unique user owner) and `cart_items` (unique product per cart, quantity CHECK 1..99). Run `alembic upgrade head` before deploying; normal demo startup also upgrades the schema. Downgrading to 0002 deletes saved carts, preserving orders.
+Миграция 0003 добавляет carts и cart_items, миграция 0004 — версию корзины. Перед обновлением выполните `alembic upgrade head`. Откат к 0002 удаляет корзины, но сохраняет заказы.
 
-- `GET /api/cart`: current user's items with live product price, stock and active flag; empty before first addition.
-- `PUT /api/cart/items`: JSON `{ "product_id": 1, "quantity": 2, "revision": 0 }` sets absolute quantity. Strict integers 1..99; missing/inactive product returns 404, insufficient current stock 409, malformed quantity 422. Concurrent insert conflicts return 409 and may be retried.
-- `DELETE /api/cart/items/{product_id}?revision=N`: version-checked removal from current user's cart.
+- GET /api/cart возвращает позиции, текущие цены/остатки и revision.
+- PUT /api/cart/items принимает product_id, quantity и revision. Количество — целое от 1 до 99. Недоступный товар: 404, недостаточный остаток или устаревшая версия: 409, неверные поля: 422.
+- DELETE /api/cart/items/{product_id}?revision=N удаляет позицию с проверкой версии.
 
-All endpoints require the session cookie. Writes require the existing JSON/Origin checks. No caller-supplied owner or cart ID is accepted. Logout removes the session, not the cart. The storefront restores the saved cart on login/reload; guest baskets remain memory-only and are replaced by the saved basket on login. Saving a cart does not reserve stock or freeze prices. Checkout still uses the existing `/api/orders` transaction and idempotency contract unchanged; checkout accepts optional `cart_revision` from GET /api/cart. For that exact revision, submitted matching positions are removed inside the order/stock transaction. If the revision changed, checkout preserves the cart; replay never cleans a newer cart. Clients omitting cart_revision retain the legacy order-only contract. Writes require the revision from GET /api/cart. A stale write returns409 without modifying items; the storefront reloads the saved cart and shows the conflict.
+Корзина определяется по сессии, передать чужой user_id/cart_id нельзя. Изменения требуют JSON и разрешённый Origin. Выход удаляет сессию, корзина остаётся в БД. При входе загружается сохранённая корзина; гостевая корзина хранится только во вкладке и заменяется сохранённой.
 
-Tests cover logout/login plus application restart persistence, owner isolation, strict quantities, missing products, insufficient stock and unchanged inventory. Existing order regression tests remain in place.
+Каждая запись увеличивает revision. Устаревшая вкладка получает 409: интерфейс перечитывает корзину и предлагает повторить действие. Автоматического слияния нет. Корзина не резервирует остаток и не фиксирует цену.
 
+Оформление заказа сохраняет прежнюю транзакцию и идемпотентность. Необязательное поле cart_revision связывает очистку с отправленным снимком: совпавшие позиции удаляются в той же транзакции, что заказ и списание остатков. Изменённая корзина сохраняется. Повтор уже созданного заказа новую корзину не очищает. Клиент без cart_revision создаёт заказ без очистки корзины.
 
-Migration `0004` adds the cart revision. Each cart write increments it. Both editing and cleanup are protected by revision compare-and-swap. Missing revision returns422. A successful edit increments revision, so repeating it with the old revision returns409. Stock is always revalidated by checkout. The storefront reloads the cart after checkout; stale snapshots may intentionally remain visible. CI runs migrated-schema atomic cleanup/replay/rollback tests on PostgreSQL for Python 3.12–3.14. Browser smoke checks logout/login/reload persistence and cleanup.
+Тесты проверяют повторный вход и перезапуск приложения, изоляцию владельцев, количество и остатки, конфликты версий, откат неудачного заказа и повтор запроса. Браузерный сценарий проверяет конфликт с другой вкладкой.
+
+## Состояния интерфейса
+
+Проверены ширины 320, 390, 768 и 1440 px в headless Chrome. [Пустой каталог](docs/screenshots/catalog-empty-mobile.png) и [конфликт корзины](docs/screenshots/cart-conflict-mobile.png) сняты на вымышленных данных. При конфликте интерфейс показывает сообщение в открытом диалоге и загружает актуальную корзину.
