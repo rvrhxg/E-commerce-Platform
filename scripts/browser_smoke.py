@@ -63,6 +63,14 @@ with tempfile.TemporaryDirectory(prefix="atelier-browser-") as temporary:
                 expect(page.locator('#cart-count')).to_have_text('1')
                 page.reload()
                 expect(page.locator('#cart-count')).to_have_text('1')
+                snapshot=page.request.get('http://127.0.0.1:8000/api/cart').json()
+                product_id=snapshot['items'][0]['product_id']
+                changed=page.request.put('http://127.0.0.1:8000/api/cart/items',data={'product_id':product_id,'quantity':2,'revision':snapshot['revision']},headers={'Origin':'http://127.0.0.1:8000'})
+                assert changed.status==200
+                page.locator('.product').first.get_by_role('button',name='В корзину +',exact=True).click()
+                expect(page.locator('#notice')).to_contain_text('Cart changed')
+                expect(page.locator('#cart-count')).to_have_text('2')
+
             page.get_by_role("button", name="Корзина").click()
             page.get_by_label("Адрес доставки").fill("Демонстрационный адрес доставки")
             pause(page)

@@ -28,6 +28,10 @@ class BasketItem(BaseModel):
     quantity: StrictInt = Field(ge=1, le=99)
 
 
+class CartWrite(BasketItem):
+    revision: StrictInt = Field(ge=0)
+
+
 class CheckoutInput(BaseModel):
     cart_revision: StrictInt | None = Field(default=None, ge=0)
     items: list[BasketItem] = Field(min_length=1, max_length=100)
@@ -198,7 +202,7 @@ def create_app(url=None, origin=None):
             return {"revision": cart.revision if cart else 0, "items": [{"product_id": item.product_id, "quantity": item.quantity, "title": product.title, "price_kopecks": product.price_kopecks, "stock": product.stock, "active": product.active} for item, product in rows]}
 
     @app.put("/api/cart/items")
-    def set_cart_item(data: BasketItem, request: Request):
+    def set_cart_item(data: CartWrite, request: Request):
         try:
             with sessions.begin() as session:
                 user = identity(request, session)
@@ -212,7 +216,9 @@ def create_app(url=None, origin=None):
                     cart = Cart(user_id=user.id)
                     session.add(cart)
                     session.flush()
-                session.execute(update(Cart).where(Cart.id == cart.id).values(revision=Cart.revision + 1))
+                changed = session.execute(update(Cart).where(Cart.id == cart.id, Cart.revision == data.revision).values(revision=Cart.revision + 1))
+                if changed.rowcount != 1:
+                    raise HTTPException(409, "Cart changed; reload before editing")
                 item = session.scalar(select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == data.product_id))
                 if item:
                     item.quantity = data.quantity
@@ -223,13 +229,17 @@ def create_app(url=None, origin=None):
         return {"ok": True}
 
     @app.delete("/api/cart/items/{product_id}")
-    def remove_cart_item(product_id: int, request: Request):
+    def remove_cart_item(product_id: int, request: Request, revision: int = Query(..., ge=0)):
         from sqlalchemy import delete
         with sessions.begin() as session:
             user = identity(request, session)
             cart = session.scalar(select(Cart).where(Cart.user_id == user.id))
+            if not cart and revision != 0:
+                raise HTTPException(409, "Cart changed; reload before editing")
             if cart:
-                session.execute(update(Cart).where(Cart.id == cart.id).values(revision=Cart.revision + 1))
+                changed = session.execute(update(Cart).where(Cart.id == cart.id, Cart.revision == revision).values(revision=Cart.revision + 1))
+                if changed.rowcount != 1:
+                    raise HTTPException(409, "Cart changed; reload before editing")
                 session.execute(delete(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product_id))
         return {"ok": True}
 
